@@ -1,4 +1,5 @@
-# port-forward-admin
+# Aurora Admin Panel compose
+The docker-compose.yml for the whole stack
 
 ## Features
 
