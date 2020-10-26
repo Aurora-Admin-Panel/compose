@@ -1,0 +1,6 @@
+[submodule "backend"]
+	path = backend
+	url = git@github.com:Aurora-Admin-Panel/backend.git
+[submodule "frontend"]
+	path = frontend
+	url = git@github.com:Aurora-Admin-Panel/frontend.git
