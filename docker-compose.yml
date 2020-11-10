@@ -6,7 +6,7 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
       - ./frontend/build:/var/www/html
     ports:
-      - 8080:80
+      - 8000:80
     depends_on:
       - backend
       - frontend
@@ -60,4 +60,5 @@ services:
         - 3000:3000
     environment:
       - NODE_ENV=development
-      - BACKEND_URL=http://localhost:8080
+      - REACT_APP_BACKEND_URL=http://192.168.1.181:8000
+  
