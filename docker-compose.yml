@@ -52,7 +52,6 @@ services:
     volumes:
       - db-data:/var/lib/postgresql/data
       
-
   backend:
     build:
       context: backend
@@ -62,6 +61,8 @@ services:
     environment:
       PYTHONPATH: .
       DATABASE_URL: 'postgresql://aurora:AuroraAdminPanel321@postgres:5432/aurora'
+      ENABLE_SENTRY: 'yes'
+      SECREY_KEY: 'd7Wn3VRWMWPqpM5rqsdRAvW$$2Y7&MTwqnEFZrxA!tNDd&p9F#quNp*SsKzd&AWSLap!NkvW7DPsHktcJPA&cw@bZ$$hxpprDdGKk*h53tL47dDH2epM6JaqD6mfju4&bz'
     depends_on:
       - postgres
     volumes:
@@ -70,15 +71,22 @@ services:
   frontend:
     build:
       context: frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile-dev
     stdin_open: true
-    command: bash -c "npm install && npm start"
+    command: bash -c "yarn && yarn start"
     ports:  
         - 3000:3000
     environment:
       - NODE_ENV=development
+      - REACT_APP_VERSION=v0.9.0
     volumes:
       - ./frontend:/app
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8070:8080
   
 volumes:
   db-data:
