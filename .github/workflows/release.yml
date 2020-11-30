@@ -2,6 +2,8 @@ name: Build and Publish Release
 
 on:
   push:
+    branches: 
+      - dev
   release:
     types: [published]
 
@@ -30,6 +32,7 @@ jobs:
       shell: bash
       run: |
         echo "##[set-output name=tag_name;]$(echo ${GITHUB_REF#refs/heads/}-$(git rev-parse --short HEAD))"
+        echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
     - name: Use Node.js 15
       uses: actions/setup-node@v2-beta
       with:
@@ -37,8 +40,11 @@ jobs:
         check-latest: true
     - run: yarn
       working-directory: frontend
-    - run: REACT_APP_VERSION=${{ github.event.release.tag_name || steps.vars.outputs.tag_name }} yarn run build
+    - run: REACT_APP_VERSION= yarn run build
       working-directory: frontend
+      env:
+        REACT_APP_VERSION: ${{ github.event.release.tag_name || steps.vars.outputs.tag_name }}
+        NODE_ENV: production
     -
       name: Build and Publish Frontend ${{ github.event.release.tag_name || steps.vars.outputs.tag_name }}
       id: docker_build_frontend_tagged_version
@@ -67,7 +73,7 @@ jobs:
         context: ./frontend
         file: ./frontend/Dockerfile
         push: true
-        tags: leishi1313/aurora-admin-frontend:dev-latest
+        tags: leishi1313/aurora-admin-frontend:${{ steps.vars.outputs.branch }}-latest
     -
       name: Frontend digest
       run: echo ${{ steps.docker_build_frontend_tagged_version.outputs.digest }}
@@ -96,6 +102,7 @@ jobs:
       shell: bash
       run: |
         echo "##[set-output name=tag_name;]$(echo ${GITHUB_REF#refs/heads/}-$(git rev-parse --short HEAD))"
+        echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
     -
       name: Build and Publish Backend ${{ github.event.release.tag_name || steps.vars.outputs.tag_name }}
       id: docker_build_backend_tagged_version
@@ -105,6 +112,8 @@ jobs:
         file: ./backend/Dockerfile
         push: true
         tags: leishi1313/aurora-admin-backend:${{ github.event.release.tag_name || steps.vars.outputs.tag_name }}
+        build-args: |
+          BACKEND_APP_VERSION=${{ github.event.release.tag_name || steps.vars.outputs.tag_name }}
     -
       if: github.event_name == 'release'
       name: Build and Publish Backend Latest
@@ -115,6 +124,8 @@ jobs:
         file: ./backend/Dockerfile
         push: true
         tags: leishi1313/aurora-admin-backend:latest
+        build-args: |
+          BACKEND_APP_VERSION=${{ github.event.release.tag_name || steps.vars.outputs.tag_name }}
     -
       if: github.event_name != 'release'
       name: Build and Publish Backend Dev Latest
@@ -124,7 +135,9 @@ jobs:
         context: ./backend
         file: ./backend/Dockerfile
         push: true
-        tags: leishi1313/aurora-admin-backend:dev-latest
+        tags: leishi1313/aurora-admin-backend:${{ steps.vars.outputs.branch }}-latest
+        build-args: |
+          BACKEND_APP_VERSION=${{ github.event.release.tag_name || steps.vars.outputs.tag_name }}
     -
       name: Backend digest
       run: echo ${{ steps.docker_build_backend_tagged_version.outputs.digest }}
