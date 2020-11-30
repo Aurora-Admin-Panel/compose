@@ -2,8 +2,6 @@ name: Build and Publish Release
 
 on:
   push:
-    branches:
-      - main
   release:
     types: [published]
 
@@ -11,6 +9,13 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
+    - 
+      name: Declare some variables
+      id: vars
+      shell: bash
+      run: |
+        echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+        echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
     -
       name: Set up QEMU
       uses: docker/setup-qemu-action@v1
@@ -33,26 +38,26 @@ jobs:
         check-latest: true
     - run: yarn
       working-directory: frontend
-    - run: REACT_APP_VERSION=${{ github.event.release.tag_name || 'dev-latest' }} yarn run build
+    - run: REACT_APP_VERSION=${{ github.event.release.tag_name || format('{{{0}-{1}}}', ${{ steps.vars.outputs.branch }}, ${{ steps.vars.outputs.sha_short }}) }} yarn run build
       working-directory: frontend
     -
-      name: Build and Publish Frontend ${{ github.event.release.tag_name || 'dev-latest' }}
+      name: Build and Publish Frontend ${{ github.event.release.tag_name || format('{{{0}-{1}}}', ${{ steps.vars.outputs.branch }}, ${{ steps.vars.outputs.sha_short }} }}
       id: docker_build_frontend_tagged_version
       uses: docker/build-push-action@v2
       with:
         context: ./frontend
         file: ./frontend/Dockerfile
         push: true
-        tags: leishi1313/aurora-admin-frontend:${{ github.event.release.tag_name || 'dev-latest' }}
+        tags: leishi1313/aurora-admin-frontend:${{ github.event.release.tag_name || format('{{{0}-{1}}}', ${{ steps.vars.outputs.branch }}, ${{ steps.vars.outputs.sha_short }} }}
     -
-      name: Build and Publish Backend ${{ github.event.release.tag_name || 'dev-latest' }}
+      name: Build and Publish Backend ${{ github.event.release.tag_name || format('{{{0}-{1}}}', ${{ steps.vars.outputs.branch }}, ${{ steps.vars.outputs.sha_short }} }}
       id: docker_build_backend_tagged_version
       uses: docker/build-push-action@v2
       with:
         context: ./backend
         file: ./backend/Dockerfile
         push: true
-        tags: leishi1313/aurora-admin-backend:${{ github.event.release.tag_name || 'dev-latest' }}
+        tags: leishi1313/aurora-admin-backend:${{ github.event.release.tag_name || format('{{{0}-{1}}}', ${{ steps.vars.outputs.branch }}, ${{ steps.vars.outputs.sha_short }} }}
 
     -
       if: github.event_name == 'release'
@@ -68,6 +73,26 @@ jobs:
       if: github.event_name == 'release'
       name: Build and Publish Backend Latest
       id: docker_build_backend_latest
+      uses: docker/build-push-action@v2
+      with:
+        context: ./backend
+        file: ./backend/Dockerfile
+        push: true
+        tags: leishi1313/aurora-admin-backend:latest
+    -
+      if: github.event_name != 'release'
+      name: Build and Publish Frontend Test Latest
+      id: docker_build_frontend_test_latest
+      uses: docker/build-push-action@v2
+      with:
+        context: ./frontend
+        file: ./frontend/Dockerfile
+        push: true
+        tags: leishi1313/aurora-admin-frontend:latest
+    -
+      if: github.event_name != 'release'
+      name: Build and Publish Backend Test Latest
+      id: docker_build_backend_test_latest
       uses: docker/build-push-action@v2
       with:
         context: ./backend
