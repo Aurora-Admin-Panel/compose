@@ -40,7 +40,7 @@ jobs:
         check-latest: true
     - run: yarn
       working-directory: frontend
-    - run: REACT_APP_VERSION= yarn run build
+    - run: yarn run build
       working-directory: frontend
       env:
         REACT_APP_VERSION: ${{ github.event.release.tag_name || steps.vars.outputs.tag_name }}
