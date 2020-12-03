@@ -18,22 +18,12 @@ services:
     build:
       context: backend
       dockerfile: Dockerfile
-    command: celery -A app.tasks worker --loglevel=INFO -Q main-queue -c 5
+    command: bash -c "while !</dev/tcp/postgres/5432; do sleep 1; done; celery -A app.tasks worker -B --loglevel=INFO -Q main-queue -c 5"
     environment:
       DATABASE_URL: 'postgresql://aurora:AuroraAdminPanel321@postgres:5432/aurora'
     volumes:
       - ./backend:/app
       - $HOME/.ssh/id_rsa:/app/ansible/env/ssh_key
-
-  beat:
-    build:
-      context: backend
-      dockerfile: Dockerfile
-    command: celery -A app.tasks beat --loglevel=INFO
-    environment:
-      DATABASE_URL: 'postgresql://aurora:AuroraAdminPanel321@postgres:5432/aurora'
-    volumes:
-      - ./backend:/app
 
   flower:  
     image: mher/flower:0.9.5
@@ -58,7 +48,7 @@ services:
       dockerfile: Dockerfile
       args:
         BACKEND_APP_VERSION: local
-    command: python app/main.py
+    command: bash -c "while !</dev/tcp/postgres/5432; do sleep 1; done; alembic upgrade heads && python app/main.py"
     tty: true
     environment:
       PYTHONPATH: .
