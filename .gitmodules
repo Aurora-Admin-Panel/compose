@@ -6,4 +6,4 @@
 	url = git@github.com:Aurora-Admin-Panel/frontend.git
 [submodule "deploy"]
 	path = deploy
-	url = ./deploy
+	url = git@github.com:Aurora-Admin-Panel/deploy.git
