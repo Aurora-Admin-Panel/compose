@@ -18,7 +18,7 @@ services:
     build:
       context: backend
       dockerfile: Dockerfile
-    command: bash -c "while !</dev/tcp/postgres/5432; do sleep 1; done; celery -A tasks worker -B --loglevel=INFO -Q main-queue -c 5"
+    command: bash -c "while !</dev/tcp/postgres/5432; do sleep 1; done; celery -A tasks worker -B --loglevel=INFO -Q main-queue -c 1"
     environment:
       DATABASE_URL: 'postgresql://aurora:AuroraAdminPanel321@postgres:5432/aurora'
       DDNS_INTERVAL: 120000000000
@@ -26,6 +26,11 @@ services:
     volumes:
       - ./backend:/app
       - $HOME/.ssh/id_rsa:/app/ansible/env/ssh_key
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
 
   flower:  
     image: mher/flower:0.9.5
@@ -61,6 +66,11 @@ services:
       - postgres
     volumes:
       - ./backend:/app
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
 
   frontend:
     build:
