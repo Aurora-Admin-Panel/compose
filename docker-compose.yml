@@ -18,14 +18,14 @@ services:
     build:
       context: backend
       dockerfile: Dockerfile
-    command: bash -c "while !</dev/tcp/postgres/5432; do sleep 1; done; celery -A tasks worker -B --loglevel=INFO -Ofair -Q main-queue -c 5"
+    command: bash worker.sh
     environment:
       DATABASE_URL: 'postgresql://aurora:AuroraAdminPanel321@postgres:5432/aurora'
-      DDNS_INTERVAL: 120000000000
-      TRAFFIC_INTERVAL: 600000000000
+      DDNS_INTERVAL_SECONDS: 6000000
+      TRAFFIC_INTERVAL_SECONDS: 1200000
     volumes:
       - ./backend:/app
-      - $HOME/.ssh/id_rsa:/app/ansible/env/ssh_key
+      - $HOME/.ssh/id_rsa2:/app/ansible/env/ssh_key
 
   flower:  
     image: mher/flower:0.9.5
