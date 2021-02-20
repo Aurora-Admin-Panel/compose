@@ -139,7 +139,7 @@ backend
     ├── alembic
     │   └── versions # where migrations are located
     ├── api
-    │   └── api_v1
+    │   └── v1
     │       └── endpoints
     ├── core    # config
     ├── db      # db models

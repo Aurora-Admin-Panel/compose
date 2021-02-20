@@ -23,11 +23,11 @@ services:
       ENABLE_SENTRY: 'yes'
       ENVIRONMENT: DEV
       DATABASE_URL: 'postgresql://aurora:AuroraAdminPanel321@postgres:5432/aurora'
-      DDNS_INTERVAL_SECONDS: 6000000
-      TRAFFIC_INTERVAL_SECONDS: 1200000
+      DDNS_INTERVAL_SECONDS: 60000
+      TRAFFIC_INTERVAL_SECONDS: 10000
     volumes:
+      - /home/lei/.ssh/id_rsa:/app/ansible/env/ssh_key
       - ./backend:/app
-      - $HOME/.ssh/id_rsa2:/app/ansible/env/ssh_key
 
   flower:  
     image: mher/flower:0.9.5
