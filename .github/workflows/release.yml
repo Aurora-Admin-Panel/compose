@@ -31,7 +31,7 @@ jobs:
       id: vars
       shell: bash
       run: |
-        echo "##[set-output name=tag_name;]$(echo ${GITHUB_REF#refs/heads/}-$(git rev-parse --short HEAD))"
+        echo "##[set-output name=tag_name;]$(echo ${GITHUB_REF#refs/heads/}-$(date +'%Y-%m-%d')-$(git rev-parse --short HEAD))"
         echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
     - name: Use Node.js 15
       uses: actions/setup-node@v2-beta
