@@ -52,6 +52,7 @@ jobs:
       with:
         context: ./frontend
         file: ./frontend/Dockerfile
+        platforms: linux/amd64,linux/arm64
         push: true
         tags: leishi1313/aurora-admin-frontend:${{ github.event.release.tag_name || steps.vars.outputs.tag_name }}
     -
@@ -62,6 +63,7 @@ jobs:
       with:
         context: ./frontend
         file: ./frontend/Dockerfile
+        platforms: linux/amd64,linux/arm64
         push: true
         tags: leishi1313/aurora-admin-frontend:latest
     -
@@ -72,6 +74,7 @@ jobs:
       with:
         context: ./frontend
         file: ./frontend/Dockerfile
+        platforms: linux/amd64,linux/arm64
         push: true
         tags: leishi1313/aurora-admin-frontend:${{ steps.vars.outputs.branch }}-latest
     -
@@ -110,6 +113,7 @@ jobs:
       with:
         context: ./backend
         file: ./backend/Dockerfile
+        platforms: linux/amd64,linux/arm64
         push: true
         tags: leishi1313/aurora-admin-backend:${{ github.event.release.tag_name || steps.vars.outputs.tag_name }}
         build-args: |
@@ -122,6 +126,7 @@ jobs:
       with:
         context: ./backend
         file: ./backend/Dockerfile
+        platforms: linux/amd64,linux/arm64
         push: true
         tags: leishi1313/aurora-admin-backend:latest
         build-args: |
@@ -134,6 +139,7 @@ jobs:
       with:
         context: ./backend
         file: ./backend/Dockerfile
+        platforms: linux/amd64,linux/arm64
         push: true
         tags: leishi1313/aurora-admin-backend:${{ steps.vars.outputs.branch }}-latest
         build-args: |
