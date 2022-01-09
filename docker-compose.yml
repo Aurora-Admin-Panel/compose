@@ -2,6 +2,7 @@ version: '3.7'
 services:
   nginx:
     image: nginx:1.17
+    user: ${whoami}
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
       - ./frontend/build:/var/www/html
@@ -19,6 +20,7 @@ services:
       context: backend
       dockerfile: Dockerfile
     command: bash worker.sh
+    user: ${whoami}
     environment:
       ENABLE_SENTRY: 'yes'
       ENVIRONMENT: DEV
@@ -53,6 +55,7 @@ services:
       args:
         BACKEND_APP_VERSION: local
     command: bash -c "while !</dev/tcp/postgres/5432; do sleep 1; done; alembic upgrade heads && python app/main.py"
+    user: ${whoami}
     tty: true
     environment:
       PYTHONPATH: .
@@ -70,6 +73,7 @@ services:
       context: frontend
       dockerfile: Dockerfile-dev
     stdin_open: true
+    user: ${whoami}
     command: bash -c "yarn && yarn start"
     ports:  
         - 3000:3000
