@@ -12,9 +12,6 @@ services:
       - backend
       - frontend
 
-  redis:
-    image: redis
-
   worker:
     build:
       context: backend
@@ -30,14 +27,6 @@ services:
     volumes:
       - /home/lei/.ssh/id_rsa:/app/ansible/env/ssh_key
       - ./backend:/app
-
-  flower:  
-    image: mher/flower:0.9.5
-    command: flower --broker=redis://redis:6379/0 --port=5555
-    ports:  
-        - 5555:5555
-    depends_on:
-      - "redis"
 
   postgres:
     image: postgres:13-alpine
