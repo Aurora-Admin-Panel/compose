@@ -2,6 +2,7 @@ version: '3.7'
 services:
   nginx:
     image: nginx:1.17
+    user: ${whoami}
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
       - ./frontend/build:/var/www/html
@@ -11,14 +12,12 @@ services:
       - backend
       - frontend
 
-  redis:
-    image: redis
-
   worker:
     build:
       context: backend
       dockerfile: Dockerfile
     command: bash worker.sh
+    user: ${whoami}
     environment:
       ENABLE_SENTRY: 'yes'
       ENVIRONMENT: DEV
@@ -28,14 +27,6 @@ services:
     volumes:
       - /home/lei/.ssh/id_rsa:/app/ansible/env/ssh_key
       - ./backend:/app
-
-  flower:  
-    image: mher/flower:0.9.5
-    command: flower --broker=redis://redis:6379/0 --port=5555
-    ports:  
-        - 5555:5555
-    depends_on:
-      - "redis"
 
   postgres:
     image: postgres:13-alpine
@@ -53,6 +44,7 @@ services:
       args:
         BACKEND_APP_VERSION: local
     command: bash -c "while !</dev/tcp/postgres/5432; do sleep 1; done; alembic upgrade heads && python app/main.py"
+    user: ${whoami}
     tty: true
     environment:
       PYTHONPATH: .
@@ -70,6 +62,7 @@ services:
       context: frontend
       dockerfile: Dockerfile-dev
     stdin_open: true
+    user: ${whoami}
     command: bash -c "yarn && yarn start"
     ports:  
         - 3000:3000
