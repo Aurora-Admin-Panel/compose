@@ -72,6 +72,10 @@ services:
     volumes:
       - ./frontend:/app
 
+  redis:
+    image: redis
+    restart: always
+
   adminer:
     image: adminer
     restart: always
