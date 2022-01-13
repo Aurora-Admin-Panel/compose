@@ -81,12 +81,6 @@ jobs:
       name: Frontend digest
       run: echo ${{ steps.docker_build_frontend_tagged_version.outputs.digest }}
 
-    - name: Send message to Telegram
-      uses: Lukasss93/telegram-action@v2
-      env:
-        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT }}
-      
   build-and-push-backend:
     runs-on: ubuntu-latest
     steps:
