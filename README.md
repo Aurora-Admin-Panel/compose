@@ -158,3 +158,7 @@ frontend
     ├── index.tsx   # entrypoint
     └── App.tsx     # handles routing
 ```
+
+### Infrastructure model
+
+![Infrastructure model](.infragenie/infrastructure_model.png)
