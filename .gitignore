@@ -1,2 +1,4 @@
 .vscode
-data.sql
+.idea
+data
+*.sql

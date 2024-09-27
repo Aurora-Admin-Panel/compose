@@ -2,12 +2,20 @@ version: '3.7'
 services:
   nginx:
     image: nginx:1.17
-    user: ${whoami}
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
-      - ./frontend/build:/var/www/html
+      - ./frontend-old/build:/var/www/html
     ports:
       - 8000:80
+    depends_on:
+      - backend
+      - frontend-old
+  nginx2:
+    image: nginx:1.17
+    volumes:
+      - ./nginx/nginx_v2.conf:/etc/nginx/conf.d/default.conf
+    ports:
+      - 8001:80
     depends_on:
       - backend
       - frontend
@@ -17,15 +25,14 @@ services:
       context: backend
       dockerfile: Dockerfile
     command: bash worker.sh
-    user: ${whoami}
     environment:
-      ENABLE_SENTRY: 'yes'
       ENVIRONMENT: DEV
       DATABASE_URL: 'postgresql://aurora:AuroraAdminPanel321@postgres:5432/aurora'
-      DDNS_INTERVAL_SECONDS: 60
-      TRAFFIC_INTERVAL_SECONDS: 10000
+      DDNS_INTERVAL_SECONDS: 6000000
+      TRAFFIC_INTERVAL_SECONDS: 10000000
+    user: 1000:1000
     volumes:
-      - /home/lei/.ssh/id_rsa:/app/ansible/env/ssh_key
+      - /home/lei/.ssh/id_ed25519:/app/ansible/env/ssh_key
       - ./backend:/app
 
   postgres:
@@ -34,6 +41,8 @@ services:
     environment:
       POSTGRES_USER: aurora
       POSTGRES_PASSWORD: AuroraAdminPanel321
+    ports:
+      - 5432:5432
     volumes:
       - db-data:/var/lib/postgresql/data
       
@@ -44,37 +53,57 @@ services:
       args:
         BACKEND_APP_VERSION: local
     command: bash -c "while !</dev/tcp/postgres/5432; do sleep 1; done; alembic upgrade heads && python app/main.py"
-    user: ${whoami}
     tty: true
     environment:
       PYTHONPATH: .
-      ENABLE_SENTRY: 'yes'
       ENVIRONMENT: DEV
       DATABASE_URL: 'postgresql://aurora:AuroraAdminPanel321@postgres:5432/aurora'
+      ASYNC_DATABASE_URL: 'postgresql+asyncpg://aurora:AuroraAdminPanel321@postgres:5432/aurora'
       SECREY_KEY: 'd7Wn3VRWMWPqpM5rqsdRAvW$$2Y7&MTwqnEFZrxA!tNDd&p9F#quNp*SsKzd&AWSLap!NkvW7DPsHktcJPA&cw@bZ$$hxpprDdGKk*h53tL47dDH2epM6JaqD6mfju4&bz'
     depends_on:
       - postgres
+    ports:
+      - 8888:8888
+    user: 1000:1000
     volumes:
+      - /home/lei/.ssh/id_ed25519:/app/ansible/env/ssh_key
       - ./backend:/app
 
-  frontend:
+  frontend-old:
     build:
-      context: frontend
+      context: frontend-old
       dockerfile: Dockerfile-dev
     stdin_open: true
-    user: ${whoami}
     command: bash -c "yarn && yarn start"
     ports:  
         - 3000:3000
     environment:
       - NODE_ENV=development
       - REACT_APP_VERSION=local
+    user: 1000:1000
+    volumes:
+      - ./frontend-old:/app
+
+  frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile-dev
+    stdin_open: true
+    command: bash -c "npm install && npm run dev"
+    ports:  
+        - 5173:5173
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_VERSION=local
+    user: 1000:1000
     volumes:
       - ./frontend:/app
 
   redis:
     image: redis
     restart: always
+    ports:
+      - 6379:6379
 
   adminer:
     image: adminer
