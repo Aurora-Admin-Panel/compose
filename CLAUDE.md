@@ -15,8 +15,8 @@ docker-compose exec backend alembic upgrade head    # run migrations
 docker-compose exec backend python3 app/initial_data.py  # seed initial superuser
 ```
 
-Access new frontend at http://localhost:8001 (nginx2 → frontend via nginx_v2.conf).
-Legacy frontend at http://localhost:8000 (nginx → frontend-old). Database admin at http://localhost:8070.
+Access frontend at http://aurora.localhost:8080 (nginx-proxy → frontend).
+API at http://aurora.localhost:8080/api (nginx-proxy → backend). Database admin at http://db.localhost:8080.
 
 ### Backend
 ```bash
@@ -43,14 +43,14 @@ cd frontend && npm run build                   # production build
 ## Architecture
 
 ### Monorepo with submodules
-Three Git submodules: `backend/`, `frontend/`, `deploy/`. The root repo has `docker-compose.yml` as the orchestration entry point. `frontend-old/` is deprecated—do not modify.
+Three Git submodules: `backend/`, `frontend/`, `deploy/`. The root repo has `docker-compose.yml` as the orchestration entry point.
 
 ### Request flow
 ```
-Client :8001 → nginx2 → /api/*  → backend:8888 (FastAPI)
-                       → /*     → frontend:5173 (Vite)
+Client :8080 → nginx-proxy → /api/*  → backend:8888 (FastAPI)   [VIRTUAL_HOST=aurora.localhost]
+                            → /*     → frontend:5173 (Vite)     [VIRTUAL_HOST=aurora.localhost]
 ```
-WebSocket connections (GraphQL subscriptions) pass through nginx with Upgrade headers.
+WebSocket connections (GraphQL subscriptions) pass through nginx-proxy with Upgrade headers.
 
 ### Backend (`backend/`)
 
@@ -75,11 +75,12 @@ GraphQL subscriptions use Redis Streams (`task_stream`) and Redis pub/sub (`serv
 
 Key patterns:
 - **State management:** Jotai atoms in `src/atoms/` are primary (auth, theme, notifications, modals). Redux store in `src/store/` is legacy.
-- **GraphQL client:** Apollo Client configured in `src/grapgql.js` (typo in filename). Queries/mutations/subscriptions in `src/quries/` (also typo).
+- **GraphQL client:** Apollo Client configured in `src/graphql.js`. Queries/mutations/subscriptions in `src/queries/`.
 - **Auth:** JWT token stored in localStorage via Jotai `atomWithStorage('auth')`. Apollo auth middleware injects Bearer token. `useAuthReducer()` hook manages login/logout.
 - **Routing:** React Router 6 in `App.jsx`. Protected routes under `/app/*` via `Layout.jsx`.
 - **i18n:** i18next with English and Chinese. Translations in `public/locales/`.
 - **Modals:** Centralized `ModalManager` in `src/features/modal/` routes by modal type.
+- **Hooks:** Generic, reusable hooks belong in `src/hooks/`. Feature-specific hooks stay in their feature directory.
 
 ### Database
 
@@ -93,6 +94,10 @@ Huey with Redis backend. The `worker` service runs the same Docker image as `bac
 
 - Do not add `Co-Authored-By` lines to commits. Commit as the user.
 
+## Change Policy
+
+This is a single-owner personal project. Backward compatibility does not need to be preserved — large refactors, rewrites, and API changes are all fine. The only constraint is that database migrations must not be destructive (no dropping columns/tables that contain data needed by the running system). Everything else (frontend, backend APIs, config, tooling) can be changed freely.
+
 ## Key Conventions
 
 - GraphQL permission classes are applied per-field: `permission_classes=[IsAuthenticated]`
@@ -101,9 +106,65 @@ Huey with Redis backend. The `worker` service runs the same Docker image as `bac
 - Real-time data flows: backend collects metrics on a schedule → publishes to Redis pub/sub → GraphQL subscription resolvers yield to connected clients.
 - File uploads go through GraphQL mutation with `apollo-upload-client` on frontend, stored at `FILE_STORAGE_PATH` (`/app/files`).
 
+## Executable Contract System
+
+Executable contracts define a parameterised command schema (`aurora-exec/v1`) that can be compiled into a concrete shell invocation with args, env vars, files, and stdin.
+
+### Contract schema (authoring format)
+The JSON contract is validated by Pydantic model `ExecutableContractAuthoringV1` in `backend/app/db/schemas/executable_contract.py`. Key shapes:
+- **Top-level**: `schemaVersion`, `contractKey`, `version`, `title`, `description`, `exec`, `ui`, `params[]`
+- **`exec`**: `bin`, `baseArgs[]`, `workingDir`, `timeoutSeconds`, `source` (optional, for binary acquisition)
+- **`params[]`**: each has `key`, `type` (string/int/float/bool/enum/secret/list/object), `label`, `required`, `default`, `emit`, `validation`, `conditions`, `ui`, `secret`
+- **`emit`**: exactly one target — `arg`, `flag`, `flagTrue`/`flagFalse`, `env`, `pos`, `file` (pathTemplate+format), `stdin` (format). Also `mode` (repeat/csv for lists), `emitIf`, `separator`
+
+### Backend compilation
+`backend/app/utils/executable_contract.py` — `compile_executable_contract_preview()` takes a contract dict + user-submitted values + context → returns `{ok, plan, preview, warnings}`. Pipeline: validate contract via Pydantic → coerce/validate each param value → evaluate conditions → emit each param into argv/env/files/stdin → build shell preview with secret redaction.
+
+GraphQL entry points in `backend/app/graphql/executable_contract.py`:
+- `compileExecutableContractPreview(contract, values, context)` — compile from raw JSON
+- `compileExecutableContractPreviewById(id, values, context)` — compile from saved contract
+- CRUD mutations: `createExecutableContract`, `updateExecutableContract`, `deleteExecutableContract`
+
+### Frontend rendering
+The contract builder UI lives in `frontend/src/features/contract-builder/`:
+- **`authoringAdapter.js`** — `authoringContractToDynamicSchema(contract)` converts the authoring param array into a flat `{key: fieldSpec}` object that the form renderer understands. Maps contract types (string→text, int/float→number, bool→checkbox, enum→select, secret→password, list, object) and attaches validation/grid config.
+- **`useDynamicForm.jsx`** — hook that takes the adapted schema → creates a `react-hook-form` instance → renders `FieldsRenderer` inside a grid container. Returns `{form, methods}`. Supports `onValuesChange` callback for live auto-compile.
+- **`fields/FieldsRenderer.jsx`** — recursively renders field components (TextField, SelectField, CheckboxField, ListField, ObjectField) based on schema type. Supports nested objects and arrays with parent path tracking.
+- **`ParamBuilderPanel.jsx`** — visual editor for authoring contract params (key, type, emit preset, validation, etc.). Mutates the contract JSON draft in-place.
+- **`ContractBuilderPage.jsx`** — orchestrates the three panels (AuthoringJsonPanel, FormPreviewPanel, CompileOutputPanel) + ParamBuilderPanel. Manages auto-compile with debounce.
+
+The `DeployModal` (`features/deployment/DeployModal.jsx`) also uses `useDynamicForm` + `authoringContractToDynamicSchema` to render parameter forms when deploying a contract to a server.
+
+## Design Context
+
+### Users
+Mixed audience: personal sysadmins managing a few relay servers, small ops teams running infrastructure for a group, and service providers with many end users. The interface must scale from simple single-server setups to complex multi-server deployments without overwhelming either audience.
+
+### Brand Personality
+**Modern, sleek, confident.** Aurora should feel like a polished professional tool — not a hobbyist dashboard, not enterprise bloatware. It communicates competence and control.
+
+### Aesthetic Direction
+**Minimal & functional** — clean lines, generous whitespace, content-first layouts. Reference points: Linear, Vercel. Avoid visual clutter, decorative elements, and unnecessary chrome. Every element should earn its place. Data density is acceptable when purposeful (metrics, server status), but default to breathing room.
+
+Anti-references: Grafana-style visual overload, generic Bootstrap admin templates, overly playful/cartoon UIs.
+
+### Design Principles
+1. **Content over decoration** — Let data and controls speak. No ornamental gradients, shadows, or borders that don't serve hierarchy.
+2. **Mobile-first, desktop-refined** — The mobile experience is a first-class citizen, not a responsive afterthought. Touch targets, drawer navigation, and card layouts should work naturally on small screens.
+3. **Consistent semantic color** — Use DaisyUI's semantic palette (primary, success, warning, error) consistently. Purple is the brand accent. Color always communicates meaning.
+4. **Progressive disclosure** — Show essential information first; reveal complexity on demand. Dropdowns, expandable sections, and modals over cramming everything on screen.
+5. **Quiet confidence** — Subtle transitions, restrained animations (Framer Motion), no flashy effects. The interface should feel fast, stable, and trustworthy.
+
+### Design System
+- **Framework**: Tailwind CSS 4 + DaisyUI 5 (component primitives)
+- **Icons**: Lucide React (primary)
+- **Animation**: Framer Motion (subtle, purposeful only)
+- **Charts**: Recharts
+- **Themes**: 3 custom (Aurora Classic light, Sunset dark, Morning light) + DaisyUI built-ins
+- **Typography**: System font stack (no custom fonts)
+- **Border radius**: 1rem containers, 0.5rem selectors, 0.25rem small elements
+- **i18n**: English + Chinese (zh fallback)
+
 ## Known Issues
 
-- `frontend/src/grapgql.js` filename typo (should be `graphql`)
-- `frontend/src/quries/` folder name typo (should be `queries`)
-- `SECREY_KEY` env var in docker-compose.yml is a typo (should be `SECRET_KEY`)
 - Root README.md is outdated (references React 16, Python 3.8)
