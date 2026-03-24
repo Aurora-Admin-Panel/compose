@@ -43,11 +43,11 @@ Full migration of the Aurora frontend from DaisyUI 5 + JavaScript to shadcn/ui +
 
 ### Tailwind/CSS Coexistence Layer
 
-DaisyUI and shadcn CSS variables can coexist during migration:
+DaisyUI and shadcn CSS variables can coexist during migration while DaisyUI remains in the tree:
 - DaisyUI uses `--color-base-100`, `--color-primary`, etc. with `data-theme` attribute
 - shadcn uses `--background`, `--foreground`, `--primary`, etc. with CSS classes
 
-**One conflict:** `--border` (DaisyUI = border width `1px`, shadcn = border color). Resolution: rename DaisyUI's `--border: 1px` to `--border-width: 1px` during coexistence.
+If token conflicts make coexistence awkward, it is acceptable to let DaisyUI styling degrade or break during the migration window rather than adding complex compatibility shims. DaisyUI is temporary and will be removed in Phase 5.
 
 Changes to `index.css`:
 - Keep DaisyUI plugin active during migration
@@ -191,7 +191,11 @@ Incremental migration. Each feature converts JSX -> TSX and DaisyUI -> shadcn. I
 
 1. Convert core atoms to TypeScript: `atoms/auth.ts`, `atoms/modal.ts`, `atoms/theme.ts`, `atoms/notification.ts`, `atoms/layout.ts` (consumed by nearly every feature, must be done first)
 2. Migrate notification system from Redux to Jotai notification atom (cross-cutting concern, blocks clean migration of all features that do error handling)
-3. Move generated GraphQL types from `store/apis/types.generated.ts` to `src/types/generated.ts` (update codegen config if applicable)
+3. Rework GraphQL codegen for TypeScript/Apollo migration:
+   - Point schema to `http://aurora.localhost:8060/api/graphql` (or equivalent local backend endpoint when needed)
+   - Update document globs to include `.ts` and `.tsx`, not only `.jsx`
+   - Move generated base types from `store/apis/types.generated.ts` to `src/types/generated.ts`
+   - Remove RTK Query-oriented generation from the migration path; missing GraphQL coverage is documented as TODO, not a blocker
 4. `Layout.tsx` + `features/layout/NavBar.tsx` + `features/layout/SideBar.tsx` — the app skeleton
 5. `features/modal/ModalManager.tsx` — rewrite with shadcn Dialog, keep Jotai modal atom stack
 6. `features/theme/` — new theme switcher with shadcn DropdownMenu
@@ -248,12 +252,12 @@ Per-feature during Phases 2-4:
 1. Audit what the feature pulls from Redux
 2. For RTK Query endpoints: confirm Apollo covers the same data, remove RTK Query usage
 3. For persisted Redux state: migrate to Jotai `atomWithStorage`
-4. If a feature relies on Redux for data not yet available via GraphQL: document as a TODO for later GraphQL implementation (do not block migration)
+4. If a feature relies on Redux for data not yet available via GraphQL: document what did not migrate cleanly as a TODO for later GraphQL implementation (do not block migration)
 
 ### Cross-Cutting Concerns (Phase 1)
 
 - **Notification system:** `showNotification` Redux thunk is used across features for error handling. Migrate to Jotai `notificationManager` atom early in Phase 1 to unblock all subsequent feature migrations.
-- **WebSocket manager:** `store/websocketManager.ts` is imported by `Layout.jsx` and `baseApi.ts`. Investigate whether it has active consumers beyond RTK Query. If only used by RTK Query (which duplicates Apollo subscriptions), remove with Redux. If independently needed, extract to `src/lib/websocket.ts`.
+- **WebSocket manager:** `store/websocketManager.ts` and related Redux websocket plumbing are legacy and should be removed. The real app uses GraphQL subscriptions via Apollo, so websocket manager removal is part of the Redux cleanup, not a separate investigation.
 - **Generated types:** `store/apis/types.generated.ts` exports `FileTypeEnum` used by `FileModal` and `ServerInfoModal`. Move to `src/types/generated.ts` in Phase 1.
 
 ### Final Cleanup (Phase 5)
