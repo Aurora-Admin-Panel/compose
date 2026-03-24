@@ -2,7 +2,7 @@
 
 ## Summary
 
-Replace all 20 existing shadcn/ui components with the full radix-nova style component set (58 components after excluding duplicates and unused toast files), adopt radix-nova as the new design language, rebuild the layout shell on the shadcn Sidebar primitive, replace the Jotai modal manager with inline Dialog/Sheet usage, switch notifications to Sonner, and migrate all pages in waves.
+Replace all 20 existing shadcn/ui components with the full radix-nova style component set (56 components after excluding duplicates and unused toast files), adopt radix-nova as the new design language, rebuild the layout shell on the shadcn Sidebar primitive, replace the Jotai modal manager with inline Dialog/Sheet usage, switch notifications to Sonner, and migrate all pages in waves.
 
 ## Decisions
 
@@ -31,7 +31,7 @@ Copy from the zip's `hooks/` directory into `src/hooks/`:
 
 Do NOT copy `use-toast.ts` — Sonner is the active toast system and this file would be dead code.
 
-This results in **58 component files** in `src/components/ui/`.
+This results in **56 component files** in `src/components/ui/`.
 
 Modifications to every component file:
 - Strip `"use client"` directives
