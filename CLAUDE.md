@@ -106,34 +106,34 @@ This is a single-owner personal project. Backward compatibility does not need to
 - Real-time data flows: backend collects metrics on a schedule → publishes to Redis pub/sub → GraphQL subscription resolvers yield to connected clients.
 - File uploads go through GraphQL mutation with `apollo-upload-client` on frontend, stored at `FILE_STORAGE_PATH` (`/app/files`).
 
-## Executable Contract System
+## Service Definition System
 
-Executable contracts define a parameterised command schema (`aurora-exec/v1`) that can be compiled into a concrete shell invocation with args, env vars, files, and stdin.
+Service definitions define a parameterised command schema (`aurora-exec/v1`) that can be compiled into a concrete shell invocation with args, env vars, files, and stdin.
 
-### Contract schema (authoring format)
-The JSON contract is validated by Pydantic model `ExecutableContractAuthoringV1` in `backend/app/db/schemas/executable_contract.py`. Key shapes:
+### Service schema (authoring format)
+The JSON service definition is validated by Pydantic model `ServiceDefinitionAuthoringV1` in `backend/app/db/schemas/service_definition.py`. Key shapes:
 - **Top-level**: `schemaVersion`, `contractKey`, `version`, `title`, `description`, `exec`, `ui`, `params[]`
 - **`exec`**: `bin`, `baseArgs[]`, `workingDir`, `timeoutSeconds`, `source` (optional, for binary acquisition)
 - **`params[]`**: each has `key`, `type` (string/int/float/bool/enum/secret/list/object), `label`, `required`, `default`, `emit`, `validation`, `conditions`, `ui`, `secret`
 - **`emit`**: exactly one target — `arg`, `flag`, `flagTrue`/`flagFalse`, `env`, `pos`, `file` (pathTemplate+format), `stdin` (format). Also `mode` (repeat/csv for lists), `emitIf`, `separator`
 
 ### Backend compilation
-`backend/app/utils/executable_contract.py` — `compile_executable_contract_preview()` takes a contract dict + user-submitted values + context → returns `{ok, plan, preview, warnings}`. Pipeline: validate contract via Pydantic → coerce/validate each param value → evaluate conditions → emit each param into argv/env/files/stdin → build shell preview with secret redaction.
+`backend/app/utils/service_definition.py` — `compile_service_preview()` takes a service definition dict + user-submitted values + context → returns `{ok, plan, preview, warnings}`. Pipeline: validate via Pydantic → coerce/validate each param value → evaluate conditions → emit each param into argv/env/files/stdin → build shell preview with secret redaction.
 
-GraphQL entry points in `backend/app/graphql/executable_contract.py`:
-- `compileExecutableContractPreview(contract, values, context)` — compile from raw JSON
-- `compileExecutableContractPreviewById(id, values, context)` — compile from saved contract
-- CRUD mutations: `createExecutableContract`, `updateExecutableContract`, `deleteExecutableContract`
+GraphQL entry points in `backend/app/graphql/service_definition.py`:
+- `compileServicePreview(contract, values, context)` — compile from raw JSON
+- `compileServicePreviewById(id, values, context)` — compile from saved service definition
+- CRUD mutations: `createServiceDefinition`, `updateServiceDefinition`, `deleteServiceDefinition`
 
 ### Frontend rendering
-The contract builder UI lives in `frontend/src/features/contract-builder/`:
-- **`authoringAdapter.js`** — `authoringContractToDynamicSchema(contract)` converts the authoring param array into a flat `{key: fieldSpec}` object that the form renderer understands. Maps contract types (string→text, int/float→number, bool→checkbox, enum→select, secret→password, list, object) and attaches validation/grid config.
+The service editor UI lives in `frontend/src/features/service-editor/`:
+- **`serviceAdapter.js`** — `serviceDefinitionToDynamicSchema(contract)` converts the authoring param array into a flat `{key: fieldSpec}` object that the form renderer understands. Maps param types (string→text, int/float→number, bool→checkbox, enum→select, secret→password, list, object) and attaches validation/grid config.
 - **`useDynamicForm.jsx`** — hook that takes the adapted schema → creates a `react-hook-form` instance → renders `FieldsRenderer` inside a grid container. Returns `{form, methods}`. Supports `onValuesChange` callback for live auto-compile.
 - **`fields/FieldsRenderer.jsx`** — recursively renders field components (TextField, SelectField, CheckboxField, ListField, ObjectField) based on schema type. Supports nested objects and arrays with parent path tracking.
-- **`ParamBuilderPanel.jsx`** — visual editor for authoring contract params (key, type, emit preset, validation, etc.). Mutates the contract JSON draft in-place.
-- **`ContractBuilderPage.jsx`** — orchestrates the three panels (AuthoringJsonPanel, FormPreviewPanel, CompileOutputPanel) + ParamBuilderPanel. Manages auto-compile with debounce.
+- **`ParamEditorPanel.jsx`** — visual editor for authoring service params (key, type, emit preset, validation, etc.). Mutates the service definition JSON draft in-place.
+- **`ServiceEditorPage.jsx`** — orchestrates the three panels (AuthoringJsonPanel, FormPreviewPanel, CompileOutputPanel) + ParamEditorPanel. Manages auto-compile with debounce.
 
-The `DeployModal` (`features/deployment/DeployModal.jsx`) also uses `useDynamicForm` + `authoringContractToDynamicSchema` to render parameter forms when deploying a contract to a server.
+The `DeployModal` (`features/deployment/DeployModal.jsx`) also uses `useDynamicForm` + `serviceDefinitionToDynamicSchema` to render parameter forms when deploying a service to a server.
 
 ## Design Context
 
