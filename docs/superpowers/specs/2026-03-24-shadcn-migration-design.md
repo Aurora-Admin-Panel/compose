@@ -20,6 +20,9 @@ Full migration of the Aurora frontend from DaisyUI 5 + JavaScript to shadcn/ui +
 | Font | Noto Sans Variable | From shadcn-template |
 | `tailwind-mix.js` plugin | Keep available, but prefer shadcn CSS variables for new code | No rework needed, backward compatible |
 | Service editor | Refactor during migration (break up 1114-line monolith) | Overdue, natural opportunity |
+| Framer Motion | Keep alongside `tw-animate-css` | Different purposes: Framer for orchestrated transitions, tw-animate for CSS utility animations |
+| `react-hook-form` | Keep as-is | Already has good TS support, used by service editor's `useDynamicForm` |
+| Vite React plugin | Keep `@vitejs/plugin-react-swc` (SWC) | Already in use, faster builds, SWC supports React 19 |
 
 ## Section 1: Foundation Setup
 
@@ -34,7 +37,9 @@ Full migration of the Aurora frontend from DaisyUI 5 + JavaScript to shadcn/ui +
 ### React 19
 
 - Bump `react` and `react-dom` from 18.2 to 19.x
-- Audit for deprecated patterns (legacy context, string refs)
+- Replace `react-helmet` with `react-helmet-async` (react-helmet uses legacy string refs, incompatible with React 19)
+- Audit `react-loading` for React 19 compatibility; replace if needed
+- Audit remaining deps for deprecated patterns (legacy context, string refs)
 
 ### Tailwind/CSS Coexistence Layer
 
@@ -48,8 +53,9 @@ Changes to `index.css`:
 - Keep DaisyUI plugin active during migration
 - Add shadcn imports: `shadcn/tailwind.css`, `tw-animate-css`
 - Add shadcn `@theme inline` block with CSS variable mappings
-- Add theme class definitions (`:root` / `.dark` and custom themes)
+- Add theme class definitions (see Section 2 for details)
 - Add `@fontsource-variable/noto-sans` import
+- Preserve custom breakpoints (`ssm: 320px`, `xs: 475px`) in shadcn `@theme` block (used by `ServerPorts`, `ServerUsers`)
 
 New files:
 - `src/lib/utils.ts` — `cn()` utility (clsx + tailwind-merge)
@@ -65,16 +71,47 @@ New files:
 - `tw-animate-css` — animation utilities
 - `@fontsource-variable/noto-sans` — font
 - `typescript`, `@types/react`, `@types/react-dom` — TypeScript tooling
+- `react-helmet-async` — React 19-compatible helmet
 
 **Remove (Phase 5, after full migration):**
 - `daisyui`
 - `@reduxjs/toolkit`, `redux-persist`, `react-redux`
+- `classnames` (replaced by `cn()` / `clsx`)
+- `react-helmet` (replaced by `react-helmet-async`)
+
+### `classnames` to `cn()` Migration
+
+The `classnames` package is imported in ~30 files. Replace with `cn()` (clsx + tailwind-merge) as each feature is migrated:
+- When converting a file from JSX to TSX, replace `import classnames from 'classnames'` with `import { cn } from '@/lib/utils'`
+- `cn()` is a drop-in replacement for `classnames()` with the added benefit of Tailwind class deduplication
+- Remove `classnames` package in Phase 5 after all files are converted
 
 ## Section 2: Theme System
 
 ### Architecture
 
-Each theme is a CSS class (e.g., `.theme-aurora-classic`) applied to `<html>`. Each class sets all shadcn CSS variables (`--background`, `--foreground`, `--primary`, etc.) using OKLCH values.
+Each theme is a named CSS class (e.g., `.theme-aurora-classic`, `.theme-sunset`) applied to `<html>`. Each class sets all shadcn CSS variables using OKLCH values.
+
+**Dark mode variant:** The shadcn-template's `@custom-variant dark (&:is(.dark *))` must be reworked. Instead of a single `.dark` class, dark themes apply both their named class AND `.dark`:
+```html
+<!-- Light theme -->
+<html class="theme-aurora-classic">
+<!-- Dark theme -->
+<html class="theme-sunset dark">
+```
+This ensures shadcn's `dark:` variant works correctly for all dark themes. The theme provider determines `color-scheme` per theme (light or dark) and applies `.dark` accordingly.
+
+**CSS structure:**
+```css
+/* Default/fallback (aurora-classic) */
+:root { --background: oklch(...); --foreground: oklch(...); ... }
+
+/* Each theme overrides all variables */
+.theme-aurora-classic { --background: ...; --primary: ...; ... }
+.theme-sunset { --background: ...; --primary: ...; ... }
+.theme-morning { --background: ...; --primary: ...; ... }
+.theme-midnight { --background: ...; --primary: ...; ... }
+```
 
 ### Initial Themes (4)
 
@@ -89,11 +126,11 @@ Each theme defines the full shadcn variable set: `--background`, `--foreground`,
 
 ### Theme Provider
 
-- New `ThemeProvider` component (similar to shadcn-template's context-based approach)
+- Custom `ThemeProvider` (rewritten from shadcn-template to support named themes, not just light/dark toggle)
 - Keep Jotai `themeSelectionAtom` for localStorage persistence
 - "Auto" mode: `prefers-color-scheme` -> aurora-classic (light) or sunset (dark)
-- Apply theme class to `<html>` element
-- Keyboard shortcut `d` for quick light/dark toggle
+- Apply theme class + `.dark` (for dark themes) to `<html>` element
+- Keyboard shortcut `d` for quick light/dark toggle (cycles between last-used light and dark themes)
 
 ### DaisyUI Theme Reference
 
@@ -150,47 +187,58 @@ Use `npx shadcn@latest add <component>` for the base, then customize styling to 
 
 Incremental migration. Each feature converts JSX -> TSX and DaisyUI -> shadcn. If DaisyUI config must break at any point, remaining features are bulk-swapped.
 
-### Phase 1 — Core Shell
+### Phase 1 — Core Shell + Shared Infrastructure
 
-1. `Layout.tsx` + `features/layout/NavBar.tsx` + `features/layout/SideBar.tsx`
-2. `features/modal/ModalManager.tsx` — rewrite with shadcn Dialog, keep Jotai modal atom stack
-3. `features/theme/` — new theme switcher with shadcn DropdownMenu
-4. `features/i18n/` — language switcher
+1. Convert core atoms to TypeScript: `atoms/auth.ts`, `atoms/modal.ts`, `atoms/theme.ts`, `atoms/notification.ts`, `atoms/layout.ts` (consumed by nearly every feature, must be done first)
+2. Migrate notification system from Redux to Jotai notification atom (cross-cutting concern, blocks clean migration of all features that do error handling)
+3. Move generated GraphQL types from `store/apis/types.generated.ts` to `src/types/generated.ts` (update codegen config if applicable)
+4. `Layout.tsx` + `features/layout/NavBar.tsx` + `features/layout/SideBar.tsx` — the app skeleton
+5. `features/modal/ModalManager.tsx` — rewrite with shadcn Dialog, keep Jotai modal atom stack
+6. `features/theme/` — new theme switcher with shadcn DropdownMenu
+7. `features/i18n/` — language switcher
+8. `features/Notification.tsx` — shared notification component
+9. `features/Paginator.tsx` — shared pagination component
 
 ### Phase 2 — Auth + Simple Features
 
-5. `features/auth/` — login, create account (Input, Button, Card)
-6. `features/about/` — static page
-7. `features/user/` — user management (Table, Badge, Dialog)
+10. `features/auth/` — login, create account (Input, Button, Card)
+11. `features/about/` — static page
+12. `features/user/` — user management (Table, Badge, Dialog)
 
 ### Phase 3 — Core Business Features
 
-8. `features/server/` — server list, cards, stats
-9. `features/port/` — port management modals
-10. `features/file/` — file management
+13. `features/server/` — server list, cards, stats
+14. `features/port/` — port management modals
+15. `features/file/` — file management
 
 ### Phase 4 — Complex Features
 
-11. `features/deployment/` — DeployModal, DeploymentList, BindingModal
-12. `features/service-editor/` — refactor + migrate (see Section 6)
+16. `features/deployment/` — DeployModal, DeploymentList, BindingModal
+17. `features/service-editor/` — refactor + migrate (see Section 6)
 
 ### Phase 5 — Cleanup
 
-13. Remove DaisyUI plugin + package
-14. Remove Redux + redux-persist + react-redux
-15. Remove legacy `store/` directory
-16. Clean up remaining `.jsx` files, dead imports, unused CSS
-17. Remove DaisyUI theme reference if no longer needed
+18. Remove DaisyUI plugin + package
+19. Remove Redux + redux-persist + react-redux
+20. Remove legacy `store/` directory
+21. Remove `classnames` package
+22. Remove `react-helmet` package
+23. Clean up remaining `.jsx` files, dead imports, unused CSS
+24. Review `tailwind-safelist.js` — remove if dynamic class safelist is no longer needed, or convert to TS
+25. Remove DaisyUI theme reference if no longer needed
 
 ### Shared Infrastructure
 
 Converted as each consuming feature is migrated:
-- `atoms/` — add TypeScript types
 - `hooks/` — convert to `.ts`/`.tsx`
 - `queries/` — add types
 - `graphql.js` -> `graphql.ts`
 - `routes.js` -> `routes.ts`
 - `i18n.js` -> `i18n.ts`
+
+### `src/apis/` Directory
+
+The `src/apis/` directory (5 files: auth, ports, servers, users, utils) uses `axios` for REST calls. `apis/auth.js` is used by the Jotai auth reducer for token validation. These are kept and converted to TypeScript during migration. Whether to replace them with Apollo/GraphQL calls is out of scope — document as a future TODO if applicable.
 
 ## Section 5: Redux Removal
 
@@ -201,6 +249,12 @@ Per-feature during Phases 2-4:
 2. For RTK Query endpoints: confirm Apollo covers the same data, remove RTK Query usage
 3. For persisted Redux state: migrate to Jotai `atomWithStorage`
 4. If a feature relies on Redux for data not yet available via GraphQL: document as a TODO for later GraphQL implementation (do not block migration)
+
+### Cross-Cutting Concerns (Phase 1)
+
+- **Notification system:** `showNotification` Redux thunk is used across features for error handling. Migrate to Jotai `notificationManager` atom early in Phase 1 to unblock all subsequent feature migrations.
+- **WebSocket manager:** `store/websocketManager.ts` is imported by `Layout.jsx` and `baseApi.ts`. Investigate whether it has active consumers beyond RTK Query. If only used by RTK Query (which duplicates Apollo subscriptions), remove with Redux. If independently needed, extract to `src/lib/websocket.ts`.
+- **Generated types:** `store/apis/types.generated.ts` exports `FileTypeEnum` used by `FileModal` and `ServerInfoModal`. Move to `src/types/generated.ts` in Phase 1.
 
 ### Final Cleanup (Phase 5)
 
@@ -231,3 +285,4 @@ Each module receives the current param draft and an `onChange` callback. The she
 - Swap DaisyUI form classes for shadcn `Input`, `Select`, `Checkbox`, `Textarea`, `Label`
 - `FieldShell` becomes a wrapper using shadcn `Label` + error display
 - `ListField` and `ObjectField` keep recursive rendering logic, restyled with shadcn components
+- `react-hook-form` integration stays as-is (already well-typed)
