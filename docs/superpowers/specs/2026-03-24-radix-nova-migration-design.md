@@ -98,8 +98,8 @@ Already has the same `cn()` function — no change needed.
 
 ### Remove
 
-- `features/layout/SideBar.tsx`
-- `features/layout/NavBar.tsx`
+- `features/layout/SideBar.tsx` (rebuilt on shadcn Sidebar primitive)
+- `features/layout/NavBar.tsx` (rebuilt as a sticky header inside `SidebarInset`)
 - `features/ui/ModalShell.tsx`
 - `features/modal/ModalManager.tsx`
 - `features/modal/ConfirmationModal.tsx`
@@ -109,19 +109,63 @@ Already has the same `cn()` function — no change needed.
 
 The zip's `sidebar.tsx` persists collapse state via `document.cookie` — this is a Next.js SSR pattern. In this Vite SPA, replace the cookie mechanism with `localStorage` (or reuse the existing `drawerOpenAtom` from `atoms/layout.ts` if appropriate). The sidebar should read initial state from localStorage on mount and write state changes back.
 
-### Rebuild `Layout.tsx`
+### Rebuild `Layout.tsx` — Sidebar + Sticky Navbar
 
-Built on the shadcn `Sidebar` primitive:
+The current layout pattern is **sidebar (left) + sticky top navbar (top of content area)**. This pattern is preserved using the shadcn Sidebar primitive:
+
+```
+┌──────────┬──────────────────────────────┐
+│          │  Sticky NavBar               │
+│ Sidebar  │  [SidebarTrigger] [spacer] [account dropdown] │
+│          ├──────────────────────────────┤
+│  nav     │                              │
+│  items   │  <Outlet /> (page content)   │
+│          │                              │
+│          │                              │
+│ footer:  │                              │
+│ theme/   │                              │
+│ lang     │                              │
+└──────────┴──────────────────────────────┘
+```
+
+**Sidebar (left):**
 - `SidebarProvider` + `Sidebar` + `SidebarContent` + `SidebarGroup` + `SidebarMenu` as structural skeleton
 - Port existing nav items from `routes.ts` into `SidebarMenuItem` entries
 - Theme switch and language switch move into `SidebarFooter`
-- Main content area uses `SidebarInset` for the page outlet
-- Mobile: shadcn sidebar handles responsive collapse natively via `SidebarTrigger`
+- Mobile: shadcn sidebar handles responsive collapse natively (sheet-based overlay)
+
+**Sticky NavBar (top of content area):**
+- Lives inside `SidebarInset`, above the `<Outlet />`
+- Sticky header with `sticky top-0 z-30 backdrop-blur` styling (same pattern as current `NavBar.tsx`)
+- Left side: `SidebarTrigger` (hamburger to toggle sidebar on mobile, collapse on desktop)
+- Left side (optional): `Separator` + `Breadcrumb` for page context
+- Right side: account `DropdownMenu` with theme picker submenu, language submenu, and logout — same structure as current `NavBar.tsx`
+- The hamburger no longer needs `drawerOpenAtom` — `SidebarTrigger` handles toggle internally
+
+**Structure in code:**
+```tsx
+<SidebarProvider>
+  <Sidebar>
+    <SidebarContent>{/* nav items */}</SidebarContent>
+    <SidebarFooter>{/* theme + lang switches */}</SidebarFooter>
+  </Sidebar>
+  <SidebarInset>
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b backdrop-blur bg-background/80 px-4">
+      <SidebarTrigger />
+      <div className="flex-1" />
+      {/* account dropdown */}
+    </header>
+    <main>
+      <Outlet />
+    </main>
+  </SidebarInset>
+</SidebarProvider>
+```
 
 ### Jotai cleanup
 
 - Remove modal-related atoms
-- Remove `drawerOpenAtom` from `atoms/layout.ts` (sidebar now manages its own state)
+- Remove `drawerOpenAtom` from `atoms/layout.ts` (sidebar trigger handles toggle internally now)
 - Auth atoms, theme atoms, and other app state atoms remain untouched
 
 ### Provider stack in `main.tsx`
