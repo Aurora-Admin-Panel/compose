@@ -2,3 +2,5 @@
 .idea
 data
 *.sql
+.env
+screenshots/

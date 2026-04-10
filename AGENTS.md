@@ -31,10 +31,10 @@ aurora/
 ## Architecture
 
 ```text
-Client :8080 → nginx-proxy → /api/* → backend:8888
+Client :8060 → nginx-proxy → /api/* → backend:8888
                           → /*     → frontend:5173
 
-db.localhost:8080 → nginx-proxy → adminer:8080
+db.localhost:8060 → nginx-proxy → adminer:8080
 
 backend → PostgreSQL + TimescaleDB
         → Redis
@@ -50,15 +50,13 @@ GraphQL subscriptions are served from `/api/graphql` over WebSocket and pass thr
 
 | Service | Port | Purpose |
 |---|---:|---|
-| `nginx-proxy` | `8080` | Reverse proxy for `aurora.localhost` and `db.localhost` |
+| `nginx-proxy` | `8060` | Reverse proxy for `aurora.localhost` and `db.localhost` |
 | `backend` | `8888` | FastAPI app, GraphQL API, auth, uploads |
 | `worker` | - | Huey worker for background jobs and SSH orchestration |
 | `frontend` | `5173` | Vite dev server for the active frontend |
 | `postgres` | `5432` | PostgreSQL + TimescaleDB |
 | `redis` | `6379` | Cache, queue, pub/sub |
-| `adminer` | proxied via `db.localhost:8080` | Database admin UI |
-
-Note: local developer environments sometimes remap the proxy to a different host port such as `8060`, but the committed `docker-compose.yml` exposes `8080`.
+| `adminer` | proxied via `db.localhost:8060` | Database admin UI |
 
 ## Backend (`backend/`)
 
@@ -239,7 +237,7 @@ cd frontend && npm run dev
 cd frontend && npm run build
 ```
 
-Access the active app through `http://aurora.localhost:8080`.
+Access the active app through `http://aurora.localhost:8060`.
 
 ## Service Definition System
 
@@ -289,9 +287,9 @@ docker compose exec backend python app/initial_data.py
 
 Then open:
 
-- `http://aurora.localhost:8080`
-- `http://aurora.localhost:8080/api/graphql`
-- `http://db.localhost:8080`
+- `http://aurora.localhost:8060`
+- `http://aurora.localhost:8060/api/graphql`
+- `http://db.localhost:8060`
 
 ### Typical Change Areas
 
@@ -300,6 +298,16 @@ Then open:
 - Task / SSH orchestration: `backend/tasks/`
 - UI components and pages: `frontend/src/features/` and `frontend/src/components/ui/`
 - Route and navigation changes: `frontend/src/routes.ts`, `frontend/src/Layout.tsx`, `frontend/src/features/layout/`
+
+## Test Credentials
+
+Test credentials are stored in `.env` (gitignored). Use these env vars for browser testing:
+
+- `AURORA_TEST_EMAIL` — login email
+- `AURORA_TEST_PASSWORD` — login password
+- `AURORA_PORT` — nginx-proxy host port (default: `8060`)
+
+Access the app at `http://aurora.localhost:${AURORA_PORT}`.
 
 ## Change Policy
 
@@ -311,4 +319,3 @@ This is a single-owner project. Large refactors and internal API changes are acc
 - REST is still used for login and some legacy flows; GraphQL is the primary application API.
 - The service-definition schema still carries `contractKey` naming internally.
 - `frontend/src/utils/websocketManager.ts` exists as leftover utility code, but the active app uses GraphQL subscriptions.
-- Fresh `npm install` can currently hit an Apollo peer-dependency conflict with React 19; `--legacy-peer-deps` is only a temporary local workaround, not the intended final fix.
